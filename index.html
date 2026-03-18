@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>便當點餐小幫手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 SheetJS 套件來生成 Excel 檔案 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* 隱藏捲軸但保留滾動功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        /* 自訂 Toast 動畫 */
+        @keyframes slideUp {
+            from { transform: translate(-50%, 100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .toast-enter {
+            animation: slideUp 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
+
+    <!-- App 容器 (模擬手機螢幕寬度) -->
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-xl relative pb-24">
+        
+        <!-- App Header -->
+        <header class="bg-orange-500 text-white p-4 sticky top-0 z-10 shadow-md flex justify-between items-center">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <span>🥟</span> 八方雲集點餐
+            </h1>
+            <span class="text-xs bg-orange-600 px-2 py-1 rounded-full">快速點餐版</span>
+        </header>
+
+        <!-- 主要內容區 -->
+        <main class="p-4 space-y-6">
+            
+            <!-- 點餐表單 -->
+            <section class="bg-orange-50 p-4 rounded-xl border border-orange-100 shadow-sm">
+                <h2 class="text-lg font-bold text-orange-800 mb-3 border-b border-orange-200 pb-2">➕ 新增點餐</h2>
+                <form id="orderForm" class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">員工姓名 *</label>
+                            <input type="text" id="empName" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none text-sm" placeholder="例如: 王小明">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">樓層/單位 *</label>
+                            <select id="empDept" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none text-sm bg-white">
+                                <option value="" disabled selected>選擇單位</option>
+                                <option value="1樓">1樓</option>
+                                <option value="3樓">3樓</option>
+                                <option value="4樓">4樓</option>
+                                <option value="5樓">5樓</option>
+                                <option value="運研">運研</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="col-span-2">
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">餐點品項 *</label>
+                            <select id="foodItemSelect" required class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none text-sm bg-white">
+                                <option value="" disabled selected>下拉選擇...</option>
+                                
+                                <optgroup label="🥟 鍋貼 (計價/顆)">
+                                    <option value="招牌鍋貼" data-price="7.0">招牌鍋貼 ($7.0)</option>
+                                    <option value="韭菜鍋貼" data-price="7.0">韭菜鍋貼 ($7.0)</option>
+                                    <option value="韓式辣味鍋貼" data-price="7.0">韓式辣味鍋貼 ($7.0)</option>
+                                    <option value="咖哩雞肉鍋貼" data-price="7.0">咖哩雞肉鍋貼 ($7.0)</option>
+                                    <option value="玉米鍋貼" data-price="7.0">玉米鍋貼 ($7.0)</option>
+                                    <option value="新蔬食鍋貼" data-price="7.5">新蔬食鍋貼 ($7.5)</option>
+                                </optgroup>
+                                
+                                <optgroup label="🥟 水餃 (計價/顆)">
+                                    <option value="招牌水餃" data-price="7.0">招牌水餃 ($7.0)</option>
+                                    <option value="韭菜水餃" data-price="7.0">韭菜水餃 ($7.0)</option>
+                                    <option value="韓式辣味水餃" data-price="7.0">韓式辣味水餃 ($7.0)</option>
+                                    <option value="咖哩雞肉水餃" data-price="7.0">咖哩雞肉水餃 ($7.0)</option>
+                                    <option value="玉米水餃" data-price="7.0">玉米水餃 ($7.0)</option>
+                                    <option value="新蔬食水餃" data-price="7.5">新蔬食水餃 ($7.5)</option>
+                                    <option value="鮮蝦水餃" data-price="10.5">鮮蝦水餃 ($10.5)</option>
+                                </optgroup>
+
+                                <optgroup label="🥟 湯餃與抄手 (份)">
+                                    <option value="酸辣湯餃(8顆)" data-price="90">酸辣湯餃 ($90)</option>
+                                    <option value="玉米湯餃(8顆)" data-price="90">玉米湯餃 ($90)</option>
+                                    <option value="珍珠抄手紅油" data-price="60">珍珠抄手紅油 ($60)</option>
+                                    <option value="珍珠抄手和風" data-price="60">珍珠抄手和風 ($60)</option>
+                                    <option value="菜肉大抄手紅油" data-price="75">菜肉大抄手紅油 ($75)</option>
+                                    <option value="菜肉大抄手和風" data-price="75">菜肉大抄手和風 ($75)</option>
+                                </optgroup>
+                                
+                                <optgroup label="🍜 麵食類 (份)">
+                                    <option value="古早味乾麵" data-price="45">古早味乾麵 ($45)</option>
+                                    <option value="古早味湯麵" data-price="45">古早味湯麵 ($45)</option>
+                                    <option value="乾麻醬麵" data-price="55">乾麻醬麵 ($55)</option>
+                                    <option value="招牌乾麵" data-price="55">招牌乾麵 ($55)</option>
+                                    <option value="紹辣乾麵" data-price="60">紹辣乾麵 ($60)</option>
+                                    <option value="酸辣湯麵" data-price="70">酸辣湯麵 ($70)</option>
+                                    <option value="珍珠餛飩麵" data-price="70">珍珠餛飩麵 ($70)</option>
+                                    <option value="菜肉大餛飩麵" data-price="80">菜肉大餛飩麵 ($80)</option>
+                                    <option value="榨菜肉絲麵" data-price="80">榨菜肉絲麵 ($80)</option>
+                                    <option value="紹辣珍珠餛飩麵" data-price="80">紹辣珍珠餛飩麵 ($80)</option>
+                                    <option value="紹辣菜肉大餛飩麵" data-price="90">紹辣菜肉大餛飩麵 ($90)</option>
+                                </optgroup>
+                                
+                                <optgroup label="🥣 湯品與飲品">
+                                    <option value="酸辣湯" data-price="35">酸辣湯 ($35)</option>
+                                    <option value="玉米濃湯" data-price="35">玉米濃湯 ($35)</option>
+                                    <option value="旗魚花枝丸湯" data-price="35">旗魚花枝丸湯 ($35)</option>
+                                    <option value="蘿蔔湯" data-price="35">蘿蔔湯 ($35)</option>
+                                    <option value="珍珠餛飩湯" data-price="50">珍珠餛飩湯 ($50)</option>
+                                    <option value="菜肉大餛飩湯" data-price="60">菜肉大餛飩湯 ($60)</option>
+                                    <option value="香濃豆漿" data-price="20">香濃豆漿 ($20)</option>
+                                    <option value="黑豆漿" data-price="20">黑豆漿 ($20)</option>
+                                    <option value="真傳特調紅茶" data-price="20">真傳特調紅茶 ($20)</option>
+                                    <option value="寒天真傳特調紅茶" data-price="45">寒天真傳特調紅茶 ($45)</option>
+                                </optgroup>
+
+                                <optgroup label="🥒 小菜類">
+                                    <option value="滷蛋" data-price="15">滷蛋 ($15)</option>
+                                    <option value="黃金泡菜/韓式/台式" data-price="30">泡菜系列 ($30)</option>
+                                    <option value="黃金豆腐" data-price="35">黃金豆腐 ($35)</option>
+                                    <option value="燙青菜" data-price="35">燙青菜 ($35)</option>
+                                    <option value="燉蘿蔔" data-price="35">燉蘿蔔 ($35)</option>
+                                    <option value="和風秋葵/薄鹽毛豆" data-price="35">和風秋葵/薄鹽毛豆 ($35)</option>
+                                    <option value="家常小菜/小菜雙拼" data-price="40">家常小菜/雙拼 ($40)</option>
+                                    <option value="柚香蘿蔔" data-price="40">柚香蘿蔔 ($40)</option>
+                                    <option value="皮蛋豆腐" data-price="45">皮蛋豆腐 ($45)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">數量 (顆/份) *</label>
+                            <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white">
+                                <button type="button" onclick="changeQty(-1)" class="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold">-</button>
+                                <input type="number" id="foodQty" value="10" min="1" max="100" class="w-full text-center text-sm p-1.5 outline-none border-x border-gray-300">
+                                <button type="button" onclick="changeQty(1)" class="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">特殊需求 (選填)</label>
+                        <input type="text" id="foodNote" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none text-sm" placeholder="如: 湯不要蔥、麵要爛一點">
+                    </div>
+
+                    <button type="submit" class="w-full bg-orange-100 hover:bg-orange-200 text-orange-800 border border-orange-300 font-bold py-2.5 rounded-lg mt-2 transition shadow-sm active:scale-95">
+                        ➕ 加入此品項 (暫存)
+                    </button>
+                </form>
+
+                <!-- 個人暫存明細區塊 -->
+                <div id="draftArea" class="mt-4 hidden bg-white p-3 rounded-lg border border-orange-200 shadow-sm">
+                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-100 pb-2">🛒 <span id="draftUserName"></span> 的待送出清單：</h3>
+                    <ul id="draftList" class="space-y-2 mb-3 max-h-40 overflow-y-auto no-scrollbar">
+                        <!-- 暫存項目 -->
+                    </ul>
+                    <button type="button" onclick="confirmOrder()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-lg transition shadow-md active:scale-95 flex justify-center items-center gap-2">
+                        <span>✅</span> 確認完成 (正式送出)
+                    </button>
+                </div>
+            </section>
+
+            <!-- 訂單列表 (彙總) -->
+            <section>
+                <div class="flex justify-between items-end mb-3">
+                    <h2 class="text-lg font-bold text-gray-800">📋 目前點餐明細</h2>
+                    <span id="totalBadge" class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-md font-semibold">共 0 份</span>
+                </div>
+                
+                <!-- 列表容器 -->
+                <div id="orderList" class="space-y-2 max-h-64 overflow-y-auto no-scrollbar pb-2">
+                    <!-- 訂單項目會由 JS 動態生成在這裡 -->
+                    <div class="text-center text-gray-400 text-sm py-8 border-2 border-dashed border-gray-200 rounded-lg">
+                        目前還沒有人點餐喔！
+                    </div>
+                </div>
+            </section>
+
+            <!-- 統計區塊 -->
+            <section class="bg-gray-50 border border-gray-200 p-4 rounded-xl shadow-inner">
+                <h2 class="text-md font-bold text-gray-700 mb-2 border-b border-gray-200 pb-2">📊 自動彙總統計</h2>
+                <div id="summaryStats" class="text-sm text-gray-600 space-y-1">
+                    尚無數據
+                </div>
+            </section>
+
+        </main>
+
+        <!-- 底部固定操作列 -->
+        <div class="fixed bottom-0 w-full max-w-md bg-white border-t border-gray-200 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10 flex gap-2">
+            <button onclick="clearOrders()" class="px-3 py-3 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition active:scale-95 whitespace-nowrap">
+                清空
+            </button>
+            <button onclick="uploadOrders()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md flex items-center justify-center gap-1 transition active:scale-95 text-sm sm:text-base">
+                <span>☁️</span> 上傳清單
+            </button>
+            <button onclick="openDetailsModal()" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg shadow-md flex items-center justify-center gap-1 transition active:scale-95 text-sm sm:text-base">
+                <span>📄</span> 開啟明細
+            </button>
+        </div>
+
+    </div>
+
+    <!-- 自訂 Toast 提示框 -->
+    <div id="toast" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium z-50 hidden">
+        通知訊息
+    </div>
+
+    <!-- 明細表格 Modal 彈跳視窗 -->
+    <div id="detailsModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex justify-center items-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col transform transition-all">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-4 border-b border-gray-200 bg-orange-50 rounded-t-xl">
+                <h3 class="text-lg font-bold text-orange-800 flex items-center gap-2"><span>📋</span> 點餐明細總表</h3>
+                <button onclick="closeDetailsModal()" class="text-gray-500 hover:text-red-500 p-1 bg-white rounded-full shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+            </div>
+            
+            <!-- Modal Body (表格內容) -->
+            <div class="p-0 overflow-y-auto flex-1 no-scrollbar">
+                <table class="w-full text-left text-sm text-gray-600">
+                    <thead class="bg-gray-100 text-gray-700 sticky top-0 shadow-sm">
+                        <tr>
+                            <th class="p-3 font-semibold whitespace-nowrap">單位/姓名</th>
+                            <th class="p-3 font-semibold">餐點 (數量)</th>
+                            <th class="p-3 font-semibold text-right">小計</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailsTableBody" class="divide-y divide-gray-200">
+                        <!-- JS 動態產生 -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Modal Footer (總計) -->
+            <div class="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center rounded-b-xl">
+                <span class="font-bold text-gray-700">總計金額：</span>
+                <span id="modalTotalPrice" class="text-xl font-bold text-orange-600">$0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 邏輯 -->
+    <script>
+        // 儲存訂單的陣列
+        let orders = [];
+        // 儲存個人暫存的陣列
+        let draftItems = [];
+
+        // DOM 元素
+        const form = document.getElementById('orderForm');
+        const orderList = document.getElementById('orderList');
+        const totalBadge = document.getElementById('totalBadge');
+        const summaryStats = document.getElementById('summaryStats');
+        const toastEl = document.getElementById('toast');
+
+        const foodItemSelect = document.getElementById('foodItemSelect');
+        const foodQtyInput = document.getElementById('foodQty');
+
+        // 當選擇項目改變時，自動調整預設數量 (單顆計價預設10，其他預設1)
+        foodItemSelect.addEventListener('change', function() {
+            const selectedOpt = this.options[this.selectedIndex];
+            const optGroup = selectedOpt.parentElement.label;
+            // 透過群組名稱是否有標記 "計價/顆" 決定預設數量
+            if (optGroup.includes('計價/顆')) {
+                foodQtyInput.value = 10;
+            } else {
+                foodQtyInput.value = 1;
+            }
+        });
+
+        // 數量增減
+        window.changeQty = function(delta) {
+            let current = parseInt(foodQtyInput.value) || 1;
+            let newVal = current + delta;
+            if (newVal >= 1 && newVal <= 100) {
+                foodQtyInput.value = newVal;
+            }
+        };
+
+        // 表單提交事件 (改為加入暫存)
+        form.addEventListener('submit', function(e) {
+            e.preventDefault(); // 防止網頁重新整理
+
+            const empName = document.getElementById('empName').value;
+            const selectedOption = foodItemSelect.options[foodItemSelect.selectedIndex];
+            
+            if (!selectedOption.value) {
+                showToast('⚠️ 請選擇餐點品項！');
+                return;
+            }
+
+            const qty = parseInt(foodQtyInput.value) || 1;
+            const unitPrice = parseFloat(selectedOption.getAttribute('data-price'));
+
+            // 建立暫存項目
+            const draftItem = {
+                id: Date.now(),
+                item: selectedOption.value,
+                qty: qty,
+                price: Math.round(unitPrice * qty),
+                note: document.getElementById('foodNote').value || ''
+            };
+
+            draftItems.push(draftItem);
+            
+            // 更新暫存區 UI
+            document.getElementById('draftUserName').innerText = empName;
+            updateDraftUI();
+            
+            // 清空部分表單以便連續加點
+            document.getElementById('foodNote').value = '';
+            foodItemSelect.value = '';
+            // 重置數量，會被 change 事件重新賦值，預設給 10
+            foodQtyInput.value = '10';
+
+            showToast('📌 品項已暫存，請記得點擊「確認完成」送出喔！');
+        });
+
+        // 更新暫存區畫面
+        function updateDraftUI() {
+            const draftArea = document.getElementById('draftArea');
+            const draftList = document.getElementById('draftList');
+
+            if (draftItems.length === 0) {
+                draftArea.classList.add('hidden');
+            } else {
+                draftArea.classList.remove('hidden');
+                draftList.innerHTML = draftItems.map(d => `
+                    <li class="flex justify-between items-center bg-orange-50 p-2 rounded-md border border-orange-100 text-sm">
+                        <div class="flex-1">
+                            <span class="font-bold text-gray-800">${d.item}</span>
+                            <span class="text-orange-600 font-bold mx-1">x${d.qty}</span>
+                            <span class="text-gray-500 text-xs">($${d.price})</span>
+                            ${d.note ? `<div class="text-xs text-gray-500 mt-0.5">備註: ${d.note}</div>` : ''}
+                        </div>
+                        <button type="button" onclick="removeDraft(${d.id})" class="text-gray-400 hover:text-red-500 p-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </li>
+                `).join('');
+            }
+        }
+
+        // 移除暫存項目
+        window.removeDraft = function(id) {
+            draftItems = draftItems.filter(d => d.id !== id);
+            updateDraftUI();
+        };
+
+        // 確認完成並正式送出
+        window.confirmOrder = function() {
+            const name = document.getElementById('empName').value;
+            const dept = document.getElementById('empDept').value;
+
+            if (!name || !dept) {
+                showToast('⚠️ 請確保姓名與單位已填寫！');
+                return;
+            }
+
+            if (draftItems.length === 0) {
+                showToast('⚠️ 購物車內沒有餐點喔！');
+                return;
+            }
+
+            // 將暫存項目加入正式總表
+            draftItems.forEach(d => {
+                orders.push({
+                    id: Date.now() + Math.random(), // 確保多筆加入時 ID 唯一
+                    name: name,
+                    dept: dept,
+                    item: d.item,
+                    qty: d.qty,
+                    price: d.price,
+                    note: d.note || '無'
+                });
+            });
+
+            // 清空暫存
+            draftItems = [];
+            updateDraftUI();
+            
+            // 更新正式列表
+            updateUI();
+            
+            // 清空姓名，方便下一位填寫 (保留單位，因為通常同單位會一起點)
+            document.getElementById('empName').value = '';
+
+            showToast(`✅ ${name} 的點餐已確認送出！`);
+        };
+
+        // 刪除單筆訂單
+        function deleteOrder(id) {
+            orders = orders.filter(order => order.id !== id);
+            updateUI();
+        }
+
+        // 模擬上傳訂單至雲端
+        function uploadOrders() {
+            if (orders.length === 0) {
+                showToast('⚠️ 目前沒有訂單可以上傳！');
+                return;
+            }
+            showToast('⏳ 正在上傳資料...');
+            // 模擬網路延遲
+            setTimeout(() => {
+                showToast('✅ 清單已成功上傳！');
+            }, 800);
+        }
+
+        // 清空所有訂單
+        function clearOrders() {
+            if (orders.length === 0) return;
+            // 使用客製化視窗取代原生 confirm
+            const isConfirmed = window.confirm("確定要清空所有點餐紀錄嗎？");
+            if(isConfirmed) {
+                orders = [];
+                updateUI();
+                showToast('🗑️ 紀錄已清空');
+            }
+        }
+
+        // 更新畫面 UI
+        function updateUI() {
+            // 1. 更新明細列表
+            if (orders.length === 0) {
+                orderList.innerHTML = `<div class="text-center text-gray-400 text-sm py-8 border-2 border-dashed border-gray-200 rounded-lg">目前還沒有人點餐喔！</div>`;
+            } else {
+                orderList.innerHTML = orders.map(order => `
+                    <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm flex justify-between items-center">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-bold text-gray-800">${order.name}</span>
+                                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${order.dept}</span>
+                            </div>
+                            <div class="text-sm text-gray-600">
+                                ${order.item} <span class="text-orange-500 font-bold ml-1">x ${order.qty}</span> <span class="text-gray-400 ml-1">($${order.price})</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1 flex gap-2">
+                                <span>備註: <span class="text-orange-600">${order.note}</span></span>
+                            </div>
+                        </div>
+                        <button onclick="deleteOrder(${order.id})" class="text-gray-300 hover:text-red-500 p-2 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    </div>
+                `).reverse().join(''); // 最新點的在最上面
+            }
+
+            // 2. 更新總數
+            totalBadge.innerText = `共 ${orders.length} 份`;
+
+            // 3. 計算彙總與金額
+            const itemCounts = {};
+
+            orders.forEach(order => {
+                if (itemCounts[order.item]) {
+                    itemCounts[order.item] += order.qty;
+                } else {
+                    itemCounts[order.item] = order.qty;
+                }
+            });
+
+            if (Object.keys(itemCounts).length === 0) {
+                summaryStats.innerHTML = '尚無數據';
+            } else {
+                summaryStats.innerHTML = Object.entries(itemCounts).map(([itemName, count]) => `
+                    <div class="flex justify-between">
+                        <span>${itemName}</span>
+                        <span class="font-bold">x ${count}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // 開啟明細表格 Modal
+        function openDetailsModal() {
+            if (orders.length === 0) {
+                showToast('⚠️ 目前沒有點餐紀錄！');
+                return;
+            }
+
+            const tbody = document.getElementById('detailsTableBody');
+            let html = '';
+            let totalAmount = 0;
+
+            // 將訂單依照樓層排序，方便查看
+            const sortedOrders = [...orders].sort((a, b) => a.dept.localeCompare(b.dept));
+
+            sortedOrders.forEach(order => {
+                totalAmount += order.price;
+                html += `
+                    <tr class="hover:bg-orange-50 transition-colors">
+                        <td class="p-3 align-top">
+                            <div class="font-bold text-gray-800">${order.name}</div>
+                            <div class="inline-block mt-1 text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">${order.dept}</div>
+                        </td>
+                        <td class="p-3 align-top">
+                            <div class="text-gray-800">${order.item} <span class="text-orange-500 font-bold ml-1">x${order.qty}</span></div>
+                            ${order.note ? `<div class="text-xs text-orange-600 mt-1 bg-orange-100 inline-block px-1 rounded">註: ${order.note}</div>` : ''}
+                        </td>
+                        <td class="p-3 text-right font-bold text-gray-700 align-middle whitespace-nowrap">
+                            $${order.price}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+            document.getElementById('modalTotalPrice').innerText = `$${totalAmount}`;
+            document.getElementById('detailsModal').classList.remove('hidden');
+        }
+
+        // 關閉明細表格 Modal
+        function closeDetailsModal() {
+            document.getElementById('detailsModal').classList.add('hidden');
+        }
+
+        // 顯示提示訊息 (取代 alert)
+        function showToast(message) {
+            toastEl.innerText = message;
+            toastEl.classList.remove('hidden');
+            toastEl.classList.add('toast-enter');
+            
+            setTimeout(() => {
+                toastEl.classList.add('hidden');
+                toastEl.classList.remove('toast-enter');
+            }, 3000);
+        }
+
+        // 初始化 UI
+        updateUI();
+    </script>
+</body>
+</html>
